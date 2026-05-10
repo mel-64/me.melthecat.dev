@@ -187,6 +187,7 @@ async function getNowPlaying() {
             artist: track.artist?.name ?? null,
             cover: (track.image && track.image.length)
                 ? track.image[track.image.length - 1]['#text'] : null,
+            cover_source: track.image && track.image.length ? 'lastfm' : null,
         };
 
 
@@ -226,10 +227,13 @@ async function getNowPlaying() {
         
         if (!nextState.cover) {
             nextState.cover = await getCoverFromMusicBrainz(nextState.title, nextState.artist, nextState.album);
+            if (nextState.cover) {
+                nextState.cover_source = 'musicbrainz';
+            }
         }
 
         currentlyListening = nextState;
-        console.log(`Now playing: ${nextState.title} - ${nextState.artist}`);
+        console.log(`Now playing: ${nextState.title} - ${nextState.artist}, cover source: ${nextState.cover_source ?? 'none'}`);
         return;
     } catch (e) {
         console.error('Failed to poll now playing:', e);
