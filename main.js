@@ -233,9 +233,9 @@ async function getCoverFromMusicBrainz(title, artist, album) {
 
     } catch (e) {
         console.warn('Failed to fetch cover from MusicBrainz', e);
-    } finally {
-        return;
     }
+
+    return null;
 }
 
 
