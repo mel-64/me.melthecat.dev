@@ -1,0 +1,22 @@
+{
+  "name": "me.melthecat.dev",
+  "version": "1.0.0",
+  "description": "",
+  "repository": {
+    "type": "git",
+    "url": "git@git.shork.ch:melody/me.melthecat.dev"
+  },
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "app": "node main.js"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "getenv": "^2.0.0",
+    "serve-index": "^1.9.2"
+  }
+}
