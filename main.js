@@ -17,6 +17,8 @@ const musicbrainz_user_agent = "me.melthecat.dev/0.1.0 (https://me.melthecat.dev
 let currentlyListening = {};
 let isPollingNowPlaying = false;
 let cachedProfilePicture = null;
+let clientSet = new Set();
+let nowPlayingPollTimer = null;
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -65,6 +67,13 @@ app.get('/api/currentlyPlaying', async (req, res) => {
     let closed = false;
     let lastWriteTime = Date.now();
 
+    clientSet.add(req);
+    console.log('New client connected, total clients:', clientSet.size);
+    if (clientSet.size === 1) {
+        startNowPlayingPolling();
+        console.log('Started polling');
+    }
+    getNowPlaying(); // Poll immediately on new connection
     req.on('close', () => { closed = true; });
 
 
@@ -90,7 +99,18 @@ app.get('/api/currentlyPlaying', async (req, res) => {
         }
         await sleep(fetch_interval_ms);
     }
-    try { res.end(); } catch (e) { /* connection already closed */ }
+    try {
+        res.end();
+    } catch (e) {
+        /* connection already closed */
+    } finally {
+        clientSet.delete(req);
+        console.log('Client disconnected, total clients:', clientSet.size);
+        if (clientSet.size === 0) {
+            stopNowPlayingPolling();
+            console.log('Stopped polling');
+        }
+    }
 });
 
 app.listen(port, () => {
@@ -117,6 +137,23 @@ async function cacheProfilePicture() {
     } catch (e) {
         console.warn(`Failed to cache profile picture from Gravatar: ${e.message}`);
     }
+}
+
+function startNowPlayingPolling() {
+    if (nowPlayingPollTimer) {
+        return;
+    }
+
+    nowPlayingPollTimer = setInterval(getNowPlaying, fetch_interval_ms);
+}
+
+function stopNowPlayingPolling() {
+    if (!nowPlayingPollTimer) {
+        return;
+    }
+
+    clearInterval(nowPlayingPollTimer);
+    nowPlayingPollTimer = null;
 }
 
 
@@ -240,5 +277,3 @@ async function getCoverFromMusicBrainz(title, artist, album) {
 
 
 cacheProfilePicture();
-setInterval(getNowPlaying, fetch_interval_ms);
-getNowPlaying();
