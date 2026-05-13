@@ -379,47 +379,54 @@ async function getCoverFromMusicBrainz(title, artist, album) {
     return null;
 }
 
+async function fetchMusicBrainzTopResult(entityType, query, resultKey, errorContext) {
+    try {
+        const response = await safeFetch(`${musicbrainz_base_url}${entityType}/?fmt=json&query=${query}`, {
+            headers: { 'User-Agent': musicbrainz_user_agent }
+        });
+
+        if (!response?.ok) {
+            return null;
+        }
+
+        const data = await response.json();
+        return data?.[resultKey]?.[0] ?? null;
+    } catch (e) {
+        console.warn(`Failed to fetch ${errorContext} MBID from MusicBrainz`, e);
+        return null;
+    }
+}
+
 async function getReleaseIdsFromTrackInfo(title, artist, album) {
     let releaseMbids = [];
     if (album) {
-        try {
-            const mbReleaseResponse = await safeFetch(`${musicbrainz_base_url}release/?fmt=json` +
-                `&query=artist:${encodeURIComponent(artist)}%20AND%20` +
-                `release:${encodeURIComponent(album)}`,
-                { headers: { 'User-Agent': musicbrainz_user_agent } }
-            );
-            if (mbReleaseResponse?.ok) {
-                const mbReleaseData = await mbReleaseResponse.json();
-                const release = mbReleaseData.releases?.[0];
-                if ( release && checkValidArtistFromReleaseOrRecording(release, artist)) {
-                    releaseMbids.push(release.id);
-                };
-            };
-        } catch (e) {
-            console.warn('Failed to fetch release MBID from MusicBrainz using album info', e);
-        };
-    };
+        const release = await fetchMusicBrainzTopResult(
+            'release',
+            `artist:${encodeURIComponent(artist)}%20AND%20release:${encodeURIComponent(album)}`,
+            'releases',
+            'release MBID using album info'
+        );
+
+        if (release && checkValidArtistFromReleaseOrRecording(release, artist)) {
+            releaseMbids.push(release.id);
+        }
+    }
 
     if (title && artist) {
-        try {
-            const mbRecordingResponse = await safeFetch(`${musicbrainz_base_url}recording/?fmt=json` +
-                `&query=artist:${encodeURIComponent(artist)}%20AND%20` +
-                `title:${encodeURIComponent(title)}`,
-                { headers: { 'User-Agent': musicbrainz_user_agent } }
-            );
-            if (mbRecordingResponse?.ok) {
-                const mbRecordingData = await mbRecordingResponse.json();
-                const recording = mbRecordingData.recordings?.[0];
-                if (recording && checkValidArtistFromReleaseOrRecording(recording, artist)) {
-                    releaseMbids.push(recording.releases?.[0]?.id);
-                }
-            }
-        } catch (e) {
-            console.warn('Failed to fetch release MBID from MusicBrainz using track info', e);
-        };
-    };
+        const recording = await fetchMusicBrainzTopResult(
+            'recording',
+            `artist:${encodeURIComponent(artist)}%20AND%20title:${encodeURIComponent(title)}`,
+            'recordings',
+            'release MBID using track info'
+        );
+
+        if (recording && checkValidArtistFromReleaseOrRecording(recording, artist)) {
+            releaseMbids.push(recording.releases?.[0]?.id);
+        }
+    }
+
     return releaseMbids.filter(mbid => mbid !== undefined);
-};
+}
 
 function checkValidArtistFromReleaseOrRecording (data, artist) {
     let validArtist = false;
