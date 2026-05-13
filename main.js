@@ -20,6 +20,24 @@ let cachedProfilePicture = null;
 let clientSet = new Set();
 let nowPlayingPollTimer = null;
 
+function validateConfig() {
+    const required = ['LASTFM_USER', 'LASTFM_API_KEY'];
+    const missing = [];
+    
+    for (const key of required) {
+        if (!process.env[key]) {
+            missing.push(key);
+        }
+    }
+    
+    if (missing.length > 0) {
+        console.error(`Missing required environment variables: ${missing.join(', ')}`);
+        process.exit(1);
+    }
+    
+    console.log('Configuration loaded successfully');
+}
+
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -113,6 +131,8 @@ app.get('/api/currentlyPlaying', async (req, res) => {
         }
     }
 });
+
+validateConfig();
 
 app.listen(port, () => {
   console.log(`Listening on port ${port}`)
