@@ -3,6 +3,8 @@ const getenv = require('getenv')
 const app = express()
 
 const port = 3000
+const max_clients = getenv.int('MAX_CLIENTS', 100);
+const client_timeout_ms = getenv.int('CLIENT_TIMEOUT_MS', 300000); // 5 minutes
 const lastfm_user = getenv.string('LASTFM_USER');
 const fetch_interval_ms = getenv.int('FETCH_INTERVAL_MS', 3000);
 const request_timeout_ms = getenv.int('REQUEST_TIMEOUT_MS', 5000);
@@ -19,6 +21,49 @@ let isPollingNowPlaying = false;
 let cachedProfilePicture = null;
 let clientSet = new Set();
 let nowPlayingPollTimer = null;
+let cleanupTimer = null;
+
+function cleanupStaleClients() {
+    const now = Date.now();
+    let removedCount = 0;
+
+    for (const clientEntry of clientSet) {
+        const clientData = clientEntry;
+        const inactiveTime = now - clientData.lastActivityTime;
+
+        // Remove client if inactive for too long
+        if (inactiveTime > client_timeout_ms) {
+            try {
+                clientData.res.end();
+            } catch (e) {
+                // Connection already closed
+            }
+            clientSet.delete(clientEntry);
+            removedCount++;
+        }
+    }
+
+    if (removedCount > 0) {
+        console.log(`Cleaned up ${removedCount} stale clients, remaining: ${clientSet.size}`);
+    }
+}
+
+function startClientCleanup() {
+    if (cleanupTimer) {
+        return;
+    }
+    cleanupTimer = setInterval(cleanupStaleClients, 60000); // Cleanup every minute
+    console.log('Client cleanup monitoring started');
+}
+
+function stopClientCleanup() {
+    if (!cleanupTimer) {
+        return;
+    }
+    clearInterval(cleanupTimer);
+    cleanupTimer = null;
+    console.log('Client cleanup monitoring stopped');
+}
 
 function validateConfig() {
     const required = ['LASTFM_USER', 'LASTFM_API_KEY'];
@@ -86,10 +131,25 @@ app.get('/api/currentlyPlaying', async (req, res) => {
     let closed = false;
     let lastWriteTime = Date.now();
 
-    clientSet.add(req);
+    // Check max client limit
+    if (clientSet.size >= max_clients) {
+        res.status(503).type('text/plain').send('Server at max capacity');
+        console.warn(`Client rejected: max clients (${max_clients}) reached`);
+        return;
+    }
+
+    // Store client metadata
+    const clientData = {
+        res,
+        connectedAt: Date.now(),
+        lastActivityTime: Date.now(),
+    };
+
+    clientSet.add(clientData);
     console.log('New client connected, total clients:', clientSet.size);
     if (clientSet.size === 1) {
         startNowPlayingPolling();
+        startClientCleanup();
         console.log('Started polling');
     }
     getNowPlaying(); // Poll immediately on new connection
@@ -104,6 +164,7 @@ app.get('/api/currentlyPlaying', async (req, res) => {
                 res.write(payload + "\n");
                 lastSent = payload;
                 lastWriteTime = Date.now();
+                clientData.lastActivityTime = Date.now();
             } catch (e) {
                 break; 
             }
@@ -112,6 +173,7 @@ app.get('/api/currentlyPlaying', async (req, res) => {
             try {
                 res.write("\n");
                 lastWriteTime = Date.now();
+                clientData.lastActivityTime = Date.now();
             } catch (e) {
                 break;
             }
@@ -123,10 +185,11 @@ app.get('/api/currentlyPlaying', async (req, res) => {
     } catch (e) {
         /* connection already closed */
     } finally {
-        clientSet.delete(req);
+        clientSet.delete(clientData);
         console.log('Client disconnected, total clients:', clientSet.size);
         if (clientSet.size === 0) {
             stopNowPlayingPolling();
+            stopClientCleanup();
             console.log('Stopped polling');
         }
     }
