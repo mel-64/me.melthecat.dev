@@ -34,7 +34,7 @@ async function safeFetch(url, options = {}) {
             signal: controller.signal,
         });
     } catch {
-        return null;
+        return undefined;
 
     } finally {
         clearTimeout(timeoutId);
@@ -249,32 +249,18 @@ async function getNowPlaying() {
 }
 
 async function getCoverFromMusicBrainz(title, artist, album) {
-    const releaseSearch = album || title; 
     try {
-        // Get MBID from MusicBrainz for later cover art search
-        const mbResponse = await safeFetch(`${musicbrainz_base_url}release/?fmt=json&limit=1` +
-            `&query=artist:${encodeURIComponent(artist)}%20AND%20` +
-                `release:${encodeURIComponent(releaseSearch)}`,
-            {
-                headers: { 'User-Agent': musicbrainz_user_agent }
-        });
-        if (!mbResponse?.ok) {
-            return null;
-        }
-        const mbData = await mbResponse.json();
-        const releaseMbid = mbData.releases?.[0]?.id;
+        const releaseMbids = await getReleaseIdsFromTrackInfo(title, artist, album);
 
-        if (!releaseMbid) {
-            return null;
-        }
-        
         // Just check if the cover art exists, front should be there in 99% of cases if release exists
-        const caaResponse = await safeFetch(`https://coverartarchive.org/release/${releaseMbid}`, {
-            headers: { 'Accept': 'application/json' },
-            redirect: 'follow',
-        });
-        if (caaResponse?.ok) {
-            return `https://coverartarchive.org/release/${releaseMbid}/front-250`;
+        for (const releaseMbid of releaseMbids) {
+            const caaResponse = await safeFetch(`https://coverartarchive.org/release/${releaseMbid}`, {
+                headers: { 'Accept': 'application/json' },
+                redirect: 'follow',
+            });
+            if (caaResponse?.ok) {
+                return `https://coverartarchive.org/release/${releaseMbid}/front-250`;
+            }
         }
 
     } catch (e) {
@@ -284,5 +270,58 @@ async function getCoverFromMusicBrainz(title, artist, album) {
     return null;
 }
 
+async function getReleaseIdsFromTrackInfo(title, artist, album) {
+    let releaseMbids = [];
+    if (album) {
+        try {
+            const mbReleaseResponse = await safeFetch(`${musicbrainz_base_url}release/?fmt=json` +
+                `&query=artist:${encodeURIComponent(artist)}%20AND%20` +
+                `release:${encodeURIComponent(album)}`,
+                { headers: { 'User-Agent': musicbrainz_user_agent } }
+            );
+            if (mbReleaseResponse?.ok) {
+                const mbReleaseData = await mbReleaseResponse.json();
+                const release = mbReleaseData.releases?.[0];
+                if ( release && checkValidArtistFromReleaseOrRecording(release, artist)) {
+                    releaseMbids.push(release.id);
+                };
+            };
+        } catch (e) {
+            console.warn('Failed to fetch release MBID from MusicBrainz using album info', e);
+        };
+    };
+
+    if (title && artist) {
+        try {
+            const mbRecordingResponse = await safeFetch(`${musicbrainz_base_url}recording/?fmt=json` +
+                `&query=artist:${encodeURIComponent(artist)}%20AND%20` +
+                `title:${encodeURIComponent(title)}`,
+                { headers: { 'User-Agent': musicbrainz_user_agent } }
+            );
+            if (mbRecordingResponse?.ok) {
+                const mbRecordingData = await mbRecordingResponse.json();
+                const recording = mbRecordingData.recordings?.[0];
+                if (recording && checkValidArtistFromReleaseOrRecording(recording, artist)) {
+                    releaseMbids.push(recording.releases?.[0]?.id);
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to fetch release MBID from MusicBrainz using track info', e);
+        };
+    };
+    return releaseMbids.filter(mbid => mbid !== undefined);
+};
+
+function checkValidArtistFromReleaseOrRecording (data, artist) {
+    let validArtist = false;
+    for (const artistTested of data?.["artist-credit"] ?? []) {
+        if (artistTested.name?.toLowerCase() === artist.toLowerCase()
+            || artistTested?.artist?.name?.toLowerCase() === artist.toLowerCase()) {
+            validArtist = true;
+            break;
+        };
+    };
+    return validArtist;
+};
 
 cacheProfilePicture();
