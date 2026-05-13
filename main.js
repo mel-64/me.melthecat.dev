@@ -15,6 +15,7 @@ const lastfm_base_url = "https://ws.audioscrobbler.com/2.0/?api_key="
 
 const musicbrainz_base_url = "https://musicbrainz.org/ws/2/";
 const musicbrainz_user_agent = "me.melthecat.dev/0.1.0 (https://me.melthecat.dev)";
+const { sleep } = require('./public/js/helpers');
 
 let currentlyListening = {};
 let isPollingNowPlaying = false;
@@ -81,10 +82,6 @@ function validateConfig() {
     }
     
     console.log('Configuration loaded successfully');
-}
-
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 async function safeFetch(url, options = {}) {

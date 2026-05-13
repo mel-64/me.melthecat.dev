@@ -31,10 +31,6 @@ function renderNotPlaying(statusEl, thumbnailEl) {
     thumbnailEl.replaceChildren();
 }
 
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
 async function checkNowPlaying(statusEl, thumbnailEl) {
     // Keep trying to connect to the NDJSON stream; reconnect after errors/close
     while (true) {
