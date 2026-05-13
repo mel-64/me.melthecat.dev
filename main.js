@@ -190,6 +190,11 @@ async function getNowPlaying() {
             cover_source: track.image && track.image.length ? 'lastfm' : null,
         };
 
+        if (nextState.cover === '') {
+            nextState.cover = null;
+            nextState.cover_source = null;
+        }
+
 
         // Last.fm API returns empty strings for missing data
         // Handle by setting those fields to null
