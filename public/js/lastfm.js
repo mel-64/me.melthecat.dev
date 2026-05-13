@@ -66,6 +66,8 @@ async function checkNowPlaying(statusEl, thumbnailEl) {
                     // Handle empty lines
                     if (!line) continue;
 
+                    console.log('New data from stream:', line);
+
                     let dataCurrentlyPlaying;
                     try {
                         dataCurrentlyPlaying = JSON.parse(line);
