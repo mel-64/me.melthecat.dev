@@ -33,7 +33,8 @@ async function safeFetch(url, options = {}) {
             ...options,
             signal: controller.signal,
         });
-    } catch {
+    } catch (error) {
+        console.error(`Fetch failed for ${url}:`, error.message);
         return undefined;
 
     } finally {
