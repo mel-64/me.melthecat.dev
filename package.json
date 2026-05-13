@@ -16,7 +16,6 @@
   },
   "dependencies": {
     "express": "^5.2.1",
-    "getenv": "^2.0.0",
-    "serve-index": "^1.9.2"
+    "getenv": "^2.0.0"
   }
 }
