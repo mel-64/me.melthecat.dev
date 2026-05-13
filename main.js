@@ -17,12 +17,19 @@ const musicbrainz_base_url = "https://musicbrainz.org/ws/2/";
 const musicbrainz_user_agent = "me.melthecat.dev/0.1.0 (https://me.melthecat.dev)";
 const { sleep } = require('./public/js/helpers');
 
+const profile_picture_retry_max = 5;
+const profile_picture_retry_base_delay_ms = 1000;
+const now_playing_retry_max = 10;
+const now_playing_retry_base_delay_ms = 1000;
+
 let currentlyListening = {};
 let isPollingNowPlaying = false;
 let cachedProfilePicture = null;
 let clientSet = new Set();
 let nowPlayingPollTimer = null;
 let cleanupTimer = null;
+let profilePictureRetryCount = 0;
+let nowPlayingRetryCount = 0;
 
 function cleanupStaleClients() {
     const now = Date.now();
@@ -206,8 +213,17 @@ async function cacheProfilePicture() {
 
         if (!response?.ok) {
             console.warn(`Failed to fetch profile picture from Gravatar: ${response?.status ?? 'no response'}`);
-            await sleep(5000);
-            await cacheProfilePicture();
+            profilePictureRetryCount++;
+
+            if (profilePictureRetryCount <= profile_picture_retry_max) {
+                const retryDelayMs = profile_picture_retry_base_delay_ms * (2 ** (profilePictureRetryCount - 1));
+                console.log(`Retrying profile picture fetch in ${retryDelayMs}ms (attempt ${profilePictureRetryCount}/${profile_picture_retry_max})`);
+                await sleep(retryDelayMs);
+                await cacheProfilePicture();
+                return;
+            }
+
+            console.warn('Profile picture fetch retries exhausted');
             return;
         }
 
@@ -215,6 +231,7 @@ async function cacheProfilePicture() {
         const buffer = Buffer.from(await response.arrayBuffer());
         console.log('Cached profile picture from Gravatar');
         cachedProfilePicture = { buffer, contentType };
+        profilePictureRetryCount = 0;
     } catch (e) {
         console.warn(`Failed to cache profile picture from Gravatar: ${e.message}`);
     }
@@ -320,10 +337,21 @@ async function getNowPlaying() {
 
         currentlyListening = nextState;
         console.log(`Now playing: ${nextState.title} - ${nextState.artist}, cover source: ${nextState.cover_source ?? 'none'}`);
+        nowPlayingRetryCount = 0;
         return;
     } catch (e) {
         console.error('Failed to poll now playing:', e);
         currentlyListening = { error: 'Last.fm API failure' };
+
+        nowPlayingRetryCount++;
+        if (nowPlayingRetryCount <= now_playing_retry_max) {
+            const retryDelayMs = now_playing_retry_base_delay_ms * (2 ** (nowPlayingRetryCount - 1));
+            console.log(`Retrying now playing fetch in ${retryDelayMs}ms (attempt ${nowPlayingRetryCount}/${now_playing_retry_max})`);
+            await sleep(retryDelayMs);
+        } else {
+            console.warn('Now playing fetch retries exhausted');
+            nowPlayingRetryCount = 0;
+        }
     } finally {
         isPollingNowPlaying = false;
     }
