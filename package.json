@@ -15,7 +15,7 @@
     "app": "node main.js"
   },
   "dependencies": {
-    "express": "^5.2.1",
-    "getenv": "^2.0.0"
+    "express": "5.2.1",
+    "getenv": "2.0.0"
   }
 }
