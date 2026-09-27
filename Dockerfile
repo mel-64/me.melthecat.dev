@@ -3,7 +3,7 @@ FROM node:alpine AS builder
 ENV NODE_ENV=production
 WORKDIR /usr/src/app
 COPY --chown=node:node . .
-RUN npm install .
+RUN npm ci .
 
 FROM node:alpine AS runner
 WORKDIR /usr/src/app
